@@ -12,45 +12,76 @@ enum LocationResult<T> {
     case failure(Error)
 }
 
-
-import Foundation
-import CoreLocation
-
 final class LocationManagerHandler: NSObject {
     
-    private let locationManager: CLLocationManager?
-    public var newLocation: ((LocationResult<CLLocation>) -> Void)?
-    public var didChangeStatus:((Bool) -> Void)?
+    public var newLocation: ((LocationResult<CLLocation>) -> Swift.Void)?
+    public var didChangeStatus:((Bool) -> Swift.Void)?
     
+    
+    private let locationManager: CLLocationManager?
     init(manager: CLLocationManager = .init()) {
         self.locationManager = manager
         super.init()
         manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
     }
     
+    //MARK:- .init()
    public var authorizationStatus: CLAuthorizationStatus {
         return CLLocationManager.authorizationStatus()
     }
     
+    //MARK:- Request for permission
     public func requestLocationAuthorization() {
         locationManager?.requestWhenInUseAuthorization()
     }
-    public func getLocation() {
+    
+    //MARK:- get currentlocation
+    public func getCurrentLocation() {
         locationManager?.requestLocation()
     }
     
-    private func getAddress(location: CLLocation?, completionHandler:@escaping(String) -> ()) {
+      //MARK:- allow Backgrounds
+    public var allowsBackgroundLocationUpdates: Bool = false {
+        didSet {
+            locationManager?.pausesLocationUpdatesAutomatically = !allowsBackgroundLocationUpdates
+            locationManager?.allowsBackgroundLocationUpdates = allowsBackgroundLocationUpdates
+        }
+    }
+
+     //MARK:- Reverse Geo Coding
+    public func getAddressFromLocation(location: CLLocation?, completionHandler:@escaping(String) -> ()) {
         let geoCoder = CLGeocoder()
         if let location = location,
             geoCoder.isGeocoding == false {
             geoCoder.reverseGeocodeLocation(location) { placeMarks, error in
-                guard let error = error else {
+                if let error = error {
+                    print(error.localizedDescription)
                     geoCoder.cancelGeocode()
-                    return }
-                print(error.localizedDescription)
-                
+                    return
+                }
                 if let placemarker = placeMarks?.first {
-                    print(placemarker.customAddress)
+                    completionHandler(placemarker.customAddress)
+                }
+            }
+        }
+    }
+    
+    
+    //MARK:- GeoCoding
+    public func getLocationFromAddress(_ address: String, completionHandler: @escaping(LocationResult<CLLocation>) -> ()) {
+        let geoCoder = CLGeocoder()
+        if geoCoder.isGeocoding == false {
+            geoCoder.geocodeAddressString(address) { placeMarkers, error in
+                if let error = error {
+                    print(error.localizedDescription)
+                    geoCoder.cancelGeocode()
+                    completionHandler(.failure(error))
+                    return
+                }
+                if let placeMarker = placeMarkers?.first,
+                    let location = placeMarker.location {
+                    completionHandler(.success(location))
                 }
             }
         }
@@ -58,6 +89,7 @@ final class LocationManagerHandler: NSObject {
 }
 
 
+//MARK:- CLLocationManagerDelegate
 extension LocationManagerHandler: CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         
@@ -86,15 +118,15 @@ extension CLPlacemark {
     var customAddress: String {
         get {
             return [[subThoroughfare, thoroughfare],
-                    [subAdministrativeArea, administrativeArea],
-                    [subLocality, locality],
+                    [subLocality, locality, administrativeArea],
                     [country, postalCode]]
                 .map { (subComponents) -> String in
                     // Combine subcomponents with spaces (e.g. 1030 + City),
-                    subComponents.compactMap({ $0 }).joined(separator: " ")
+                    subComponents.compactMap({ $0 }).joined(separator: ", ")
             }
                 .filter({ return !$0.isEmpty }) // e.g. no street available
                 .joined(separator: ", ") // e.g. "MyStreet 1" + ", " + "1030 City"
         }
     }
 }
+
