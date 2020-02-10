@@ -6,13 +6,15 @@
 //  Copyright © 2020 imran. All rights reserved.
 //
 
-import Foundation
-import CoreLocation
-
 enum LocationResult<T> {
     case success(T)
     case failure(Error)
 }
+
+
+import Foundation
+import CoreLocation
+
 
 final class LocationManagerHandler: NSObject {
     
